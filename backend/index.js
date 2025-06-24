@@ -15,27 +15,31 @@ const io = socketIO(server, {
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
+// ✅ Root route to confirm server is running (important for Render)
+app.get('/', (req, res) => {
+  res.send('✅ Collaborative Whiteboard Backend is running');
+});
+
+// ✅ MongoDB Connection
 const mongoURI = process.env.MONGO_URI || 'your_mongodb_connection_string_here';
 mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('✅ MongoDB connected!'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Room Schema & Model
+// ✅ Room Schema and Model
 const roomSchema = new mongoose.Schema({
   roomId: { type: String, unique: true, required: true },
   password: { type: String, required: true },
 });
 const Room = mongoose.model('Room', roomSchema);
 
-// Track users and canvas state
+// ✅ Track users and canvas state
 const usersInRooms = {};          // { roomId: [ { socketId, username } ] }
 const canvasStateInRooms = {};    // { roomId: latestCanvasPathData }
 
 io.on('connection', (socket) => {
   console.log('🟢 User connected:', socket.id);
 
-  // Join Room
   socket.on('join-room', async ({ roomId, password, username }, callback) => {
     try {
       let room = await Room.findOne({ roomId });
@@ -67,24 +71,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Drawing update
   socket.on('drawing', ({ roomId, pathData }) => {
-    canvasStateInRooms[roomId] = pathData;  // ✅ Store latest canvas
+    canvasStateInRooms[roomId] = pathData;
     socket.to(roomId).emit('drawing', { pathData });
   });
 
-  // Clear canvas
   socket.on('clear-canvas', ({ roomId }) => {
-    delete canvasStateInRooms[roomId];      // ✅ Clear stored canvas
+    delete canvasStateInRooms[roomId];
     socket.to(roomId).emit('clear-canvas');
   });
 
-  // Chat
   socket.on('chat-message', ({ roomId, sender, message }) => {
     socket.to(roomId).emit('chat-message', { sender, message });
   });
 
-  // ✅ New: Handle canvas sync request
   socket.on('request-canvas', ({ roomId }) => {
     const canvasData = canvasStateInRooms[roomId];
     if (canvasData) {
@@ -92,7 +92,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Disconnect
   socket.on('disconnect', () => {
     const roomId = socket.roomId;
     if (roomId && usersInRooms[roomId]) {
@@ -101,13 +100,14 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('room-users', updatedUserList);
       if (usersInRooms[roomId].length === 0) {
         delete usersInRooms[roomId];
-        delete canvasStateInRooms[roomId]; // ✅ Clean canvas memory
+        delete canvasStateInRooms[roomId];
       }
     }
     console.log('🔴 User disconnected:', socket.id);
   });
 });
 
+// ✅ Start the server
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
